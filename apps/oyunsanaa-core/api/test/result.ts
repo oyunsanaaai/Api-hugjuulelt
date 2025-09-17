@@ -1,8 +1,9 @@
-export const config = { runtime: "edge" };
-
 export default async function handler(req: Request) {
   if (req.method !== "GET") {
-    return new Response(JSON.stringify({ error: "GET only" }), { status: 405, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ error: "GET only" }), {
+      status: 405,
+      headers: { "content-type": "application/json" }
+    });
   }
 
   const url = new URL(req.url);
