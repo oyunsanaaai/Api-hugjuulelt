@@ -1,6 +1,4 @@
-export const config = {
-  runtime: "edge",
-};
+export const config = { runtime: "edge" };
 
 export default function handler() {
   return new Response(
@@ -12,7 +10,7 @@ export default function handler() {
         diet: 65,
         activity: 62,
         relations: 48,
-        work: 60,
+        work: 60
       },
       delta_percent: {
         mood: 20,
@@ -20,15 +18,11 @@ export default function handler() {
         diet: 15,
         activity: 12,
         relations: -2,
-        work: 10,
+        work: 10
       },
       focus_top2: ["mood", "diet"],
-      narrative: "Чиний ачаалал хэвийн түвшинтэй харьцуулахад арай өндөр байна.",
+      narrative: "Чиний ачаалал хэвийн түвшинтэй харьцуулахад арай өндөр байна."
     }),
-    {
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-      },
-    }
+    { headers: { "content-type": "application/json; charset=utf-8" } }
   );
 }
