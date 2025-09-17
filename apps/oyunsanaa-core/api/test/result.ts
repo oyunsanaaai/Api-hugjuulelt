@@ -1,3 +1,5 @@
+export const config = { runtime: "nodejs18.x" };
+
 export default async function handler(req: Request) {
   if (req.method !== "GET") {
     return new Response(JSON.stringify({ error: "GET only" }), {
