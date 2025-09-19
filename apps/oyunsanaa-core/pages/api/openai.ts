@@ -13,4 +13,3 @@ export default async function handler(_req: NextApiRequest, res: NextApiResponse
 
   res.status(200).json({ result: completion.choices[0].message });
 }
-8
