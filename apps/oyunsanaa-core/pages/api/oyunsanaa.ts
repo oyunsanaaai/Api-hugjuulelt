@@ -1,3 +1,11 @@
+// CORS
+if (req.method === 'OPTIONS') {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // хүсвэл өөрийн чатны домэйноор солино
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  return res.status(200).end();
+}
+res.setHeader('Access-Control-Allow-Origin', '*'); // хүсвэл яг чатны домэйн
 // /apps/oyunsanaa-core/pages/api/oyunsanaa.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 
