@@ -1,28 +1,29 @@
-// pages/api/oyunsanaa.ts  (Next.js API route)
+// pages/api/oyunsanaa.ts  (Next.js API Route)
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-const OPENAI_API = 'https://api.openai.com/v1/chat/completions';
-const SYS_PROMPT = `
-Чи "Оюунсанаа" нэртэй туслах.
-- Энгийн асуултад богино, ойлгомжтой.
-- Илүү гүн яриа/зөвлөгөөнд тайван, эелдэг өнгөөр шаталсан тайлбар.
-- Монгол хэл дээр ярина (хэрэглэгч өөр хэлээр асуувал тэр хэлээр).
-- Хариултын өмнө битгий асуулт буцааж давтаарай.
-`;
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
-function clean(s: any) {
-  return String(s || '').replace(/<[^>]+>/g, '').trim();
-}
+// === ЭНД урт зан・заавраа БҮХЛЭЭР нь тавина ===
+// Доорх LONG_PROMPT-ийн дунд өөрийн урт файлаа хуулж тавь.
+const LONG_PROMPT = `
+Та бол "Оюунсанаа" нэртэй туслах. (энд өөрийн урт зааврыг бүхлээр нь тавина)
+- Монгол хэлээр найрсаг, ойлгомжтой ярь.
+- Хэрэглэгчийн нас/дип горим ирвэл өнгө аясыг тохируул.
+`.trim();
+
+type ReqBody = {
+  msg?: string;
+  model?: string;         // 'gpt-4o-mini' эсвэл 'gpt-4o'
+  persona?: string;       // 'soft' гэх мэт
+  deep?: boolean;         // илүү урт/гүн хариу?
+  age_category?: string;  // '26-40' гэх мэт
+  history?: { who: 'user'|'bot'; html: string }[]; // фронтоос ирдэг
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // CORS (хэрэв гаднаас шууд дуудах бол)
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    return res.status(200).end();
-  }
+  // CORS preflight (хэрэв хэрэгтэй бол үлдээгээрэй)
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -30,47 +31,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return res.status(500).json({ ok: false, error: 'OPENAI_API_KEY тохируулаагүй' });
+    if (!apiKey) return res.status(500).json({ ok: false, error: 'OPENAI_API_KEY is missing' });
 
-    // front-end-ээс ирж буй мэдээлэл
-    const { msg = '', history = [], deep = false, model } = (req.body || {}) as {
-      msg?: string;
-      history?: { who: 'user' | 'bot'; html?: string; text?: string }[];
-      deep?: boolean;
-      model?: string;
-    };
+    const {
+      msg = '',
+      model = 'gpt-4o-mini',
+      persona = 'soft',
+      deep = false,
+      age_category = '',
+      history = [],
+    } = (req.body || {}) as ReqBody;
 
-    // түүхийг OpenAI-ийн формат руу хөрвүүлэх
-    const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-      { role: 'system', content: SYS_PROMPT },
-    ];
+    // Frontend-ээс ирсэн history-г OpenAI-д таарах формат руу хөрвүүлнэ
+    const messages: { role: 'system'|'user'|'assistant'; content: string }[] = [];
 
-    for (const m of history || []) {
-      const role = m?.who === 'user' ? 'user' : 'assistant';
-      const content = clean(m?.html || m?.text);
-      if (content) messages.push({ role, content });
+    // 1) Урт зааврыг system-д өгнө
+    messages.push({
+      role: 'system',
+      content:
+        `${LONG_PROMPT}\n\n` +
+        `Параметрүүд: persona=${persona}, deep=${deep}, age=${age_category}\n` +
+        `Заавар: үргэлж Монгол хэлээр, богино мөр ба жагсаалтаар ойлгомжтой.` ,
+    });
+
+    // 2) Өмнөх яриаг нэмэх
+    for (const h of history) {
+      const role = h.who === 'user' ? 'user' : 'assistant';
+      const txt = String(h.html || '').replace(/<[^>]+>/g, '').trim();
+      if (txt) messages.push({ role, content: txt });
     }
 
-    messages.push({ role: 'user', content: clean(msg) });
+    // 3) Одоогийн хэрэглэгчийн мессэж
+    messages.push({ role: 'user', content: msg || '' });
 
-    // аль загвар ажиллуулах вэ (анхдагч нь gpt-4o-mini)
-    const chosen = model || (deep ? 'gpt-4o' : 'gpt-4o-mini');
-
-    const r = await fetch(OPENAI_API, {
+    const r = await fetch(OPENAI_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: chosen,
+        model: ['gpt-4o', 'gpt-4o-mini'].includes(model) ? model : 'gpt-4o-mini',
         messages,
-        temperature: 0.4,
+        temperature: deep ? 0.8 : 0.4,
       }),
     });
 
     const data = await r.json();
-
     if (!r.ok) {
       console.error('[oyunsanaa] OpenAI error', r.status, data);
       return res.status(r.status).json({ ok: false, error: data?.error?.message || 'OpenAI API error' });
