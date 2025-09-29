@@ -1,28 +1,20 @@
-// CORS
-if (req.method === 'OPTIONS') {
-  res.setHeader('Access-Control-Allow-Origin', '*'); // хүсвэл өөрийн чатны домэйноор солино
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  return res.status(200).end();
-}
-res.setHeader('Access-Control-Allow-Origin', '*'); // хүсвэл яг чатны домэйн
-// /apps/oyunsanaa-core/pages/api/oyunsanaa.ts
-import type { NextApiRequest, NextApiResponse } from 'next'
-
-type ReqBody = {
-  msg?: string
-  model?: string
-  history?: { who: 'user' | 'bot'; html: string }[]
-  chatSlug?: string
-}
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // CORS preflight (шаардлагатай бол)
-  if (req.method === 'OPTIONS') return res.status(200).end()
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(200).end();
+  }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'Method not allowed' })
+    return res.status(405).json({ ok: false, error: 'Only POST is allowed' });
   }
+
+  // ...таны одоогийн прокси/логик үргэлжилнэ...
+}
 
   try {
     const apiKey = process.env.OPENAI_API_KEY
