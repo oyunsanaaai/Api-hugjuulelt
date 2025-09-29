@@ -1,29 +1,21 @@
-// pages/api/oyunsanaa.ts  (Next.js API Route)
-
+// pages/api/oyunsanaa.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-
-// === ЭНД урт зан・заавраа БҮХЛЭЭР нь тавина ===
-// Доорх LONG_PROMPT-ийн дунд өөрийн урт файлаа хуулж тавь.
-const LONG_PROMPT = `
-Та бол "Оюунсанаа" нэртэй туслах. (энд өөрийн урт зааврыг бүхлээр нь тавина)
-- Монгол хэлээр найрсаг, ойлгомжтой ярь.
-- Хэрэглэгчийн нас/дип горим ирвэл өнгө аясыг тохируул.
-`.trim();
-
 type ReqBody = {
+  model?: string;
   msg?: string;
-  model?: string;         // 'gpt-4o-mini' эсвэл 'gpt-4o'
-  persona?: string;       // 'soft' гэх мэт
-  deep?: boolean;         // илүү урт/гүн хариу?
-  age_category?: string;  // '26-40' гэх мэт
-  history?: { who: 'user'|'bot'; html: string }[]; // фронтоос ирдэг
+  history?: { who: 'user' | 'bot'; html?: string; text?: string }[];
+  persona?: string;
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // CORS preflight (хэрэв хэрэгтэй бол үлдээгээрэй)
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  // CORS (хэрэв өөр домэйнээс дуудвал)
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -33,60 +25,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(500).json({ ok: false, error: 'OPENAI_API_KEY is missing' });
 
-    const {
-      msg = '',
-      model = 'gpt-4o-mini',
-      persona = 'soft',
-      deep = false,
-      age_category = '',
-      history = [],
-    } = (req.body || {}) as ReqBody;
+    const { model = 'gpt-4o-mini', msg = '', history = [], persona = 'soft' } =
+      (req.body || {}) as ReqBody;
 
-    // Frontend-ээс ирсэн history-г OpenAI-д таарах формат руу хөрвүүлнэ
-    const messages: { role: 'system'|'user'|'assistant'; content: string }[] = [];
-
-    // 1) Урт зааврыг system-д өгнө
+    // history → OpenAI messages болгох (урт мессежүүдийг авч чадна)
+    const messages: { role: 'user' | 'assistant' | 'system'; content: string }[] = [];
     messages.push({
       role: 'system',
       content:
-        `${LONG_PROMPT}\n\n` +
-        `Параметрүүд: persona=${persona}, deep=${deep}, age=${age_category}\n` +
-        `Заавар: үргэлж Монгол хэлээр, богино мөр ба жагсаалтаар ойлгомжтой.` ,
+        persona === 'soft'
+          ? 'Чи Оюунсанаа нэртэй, эелдгээр, товч тодорхой хариулдаг монгол туслах.'
+          : 'You are a helpful assistant.',
     });
 
-    // 2) Өмнөх яриаг нэмэх
-    for (const h of history) {
-      const role = h.who === 'user' ? 'user' : 'assistant';
-      const txt = String(h.html || '').replace(/<[^>]+>/g, '').trim();
-      if (txt) messages.push({ role, content: txt });
+    for (const m of history) {
+      const role = m?.who === 'bot' ? 'assistant' : 'user';
+      const content = String(m?.text || m?.html || '').replace(/<[^>]+>/g, '').trim();
+      if (content) messages.push({ role, content });
     }
+    messages.push({ role: 'user', content: String(msg || '') });
 
-    // 3) Одоогийн хэрэглэгчийн мессэж
-    messages.push({ role: 'user', content: msg || '' });
-
-    const r = await fetch(OPENAI_URL, {
+    // OpenAI chat completion
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: ['gpt-4o', 'gpt-4o-mini'].includes(model) ? model : 'gpt-4o-mini',
+        model,
         messages,
-        temperature: deep ? 0.8 : 0.4,
+        temperature: 0.4,
       }),
     });
 
     const data = await r.json();
     if (!r.ok) {
-      console.error('[oyunsanaa] OpenAI error', r.status, data);
-      return res.status(r.status).json({ ok: false, error: data?.error?.message || 'OpenAI API error' });
+      console.error('[oyunsanaa] OpenAI error:', r.status, data);
+      return res.status(r.status).json({ ok: false, error: data?.error?.message || 'OpenAI error' });
     }
 
     const reply = data?.choices?.[0]?.message?.content?.trim() || '';
     return res.status(200).json({ ok: true, reply });
   } catch (e: any) {
     console.error('[oyunsanaa] server error:', e);
-    return res.status(500).json({ ok: false, error: e?.message || 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Server error' });
   }
 }
