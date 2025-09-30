@@ -26,19 +26,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { role: "user", content: msg }
     ];
 
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ model, messages })
-    });
-    const data = await r.json();
-    const reply = data?.choices?.[0]?.message?.content || "Уучлаарай, хариулт олдсонгүй.";
+   const r = await fetch("https://api.openai.com/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${apiKey}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ model, messages })
+});
 
-    res.status(200).json({ tag: "OYU-OK", reply });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message || "Server error" });
-  }
+const data = await r.json();
+
+// ↙︎ НЭМЭЛТ: алдааг ил тод буцаая
+if (!r.ok) {
+  console.error("OpenAI error:", r.status, data);
+  return res.status(500).json({ error: `OpenAI ${r.status}: ${data?.error?.message || "unknown error"}` });
 }
+
+const reply = data?.choices?.[0]?.message?.content;
+if (!reply) {
+  console.error("OpenAI empty choices:", data);
+  return res.status(500).json({ error: "OpenAI: empty choices" });
+}
+
+return res.status(200).json({ tag: "OYU-OK", reply });
