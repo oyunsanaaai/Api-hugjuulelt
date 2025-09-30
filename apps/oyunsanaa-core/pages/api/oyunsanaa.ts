@@ -1,76 +1,85 @@
-import { useState } from "react";
+// pages/api/oyunsanaa.ts  (Next.js API route)
 
-export default function Home() {
-  const [msg, setMsg] = useState("");
-  const [reply, setReply] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+import type { NextApiRequest, NextApiResponse } from 'next';
 
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!msg.trim() || pending) return;
+const OPENAI_API = 'https://api.openai.com/v1/chat/completions';
+const SYS_PROMPT = `
+Чи "Оюунсанаа" нэртэй туслах.
+- Энгийн асуултад богино, ойлгомжтой.
+- Илүү гүн яриа/зөвлөгөөнд тайван, эелдэг өнгөөр шаталсан тайлбар.
+- Монгол хэл дээр ярина (хэрэглэгч өөр хэлээр асуувал тэр хэлээр).
+- Хариултын өмнө битгий асуулт буцааж давтаарай.
+`;
 
-    setPending(true);
-    setReply(null);
+function clean(s: any) {
+  return String(s || '').replace(/<[^>]+>/g, '').trim();
+}
 
-    try {
-      const r = await fetch("/api/oyunsanaa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: msg.trim(),
-          deep: false,
-          age_category: "26-40",
-        }),
-      });
-      const data = await r.json();
-      setReply(data.ok ? data.reply : `Алдаа: ${data.error ?? r.statusText}`);
-    } catch (err: any) {
-      setReply("Сүлжээний алдаа.");
-    } finally {
-      setPending(false);
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // CORS (хэрэв гаднаас шууд дуудах бол)
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  }
+
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return res.status(500).json({ ok: false, error: 'OPENAI_API_KEY тохируулаагүй' });
+
+    // front-end-ээс ирж буй мэдээлэл
+    const { msg = '', history = [], deep = false, model } = (req.body || {}) as {
+      msg?: string;
+      history?: { who: 'user' | 'bot'; html?: string; text?: string }[];
+      deep?: boolean;
+      model?: string;
+    };
+
+    // түүхийг OpenAI-ийн формат руу хөрвүүлэх
+    const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+      { role: 'system', content: SYS_PROMPT },
+    ];
+
+    for (const m of history || []) {
+      const role = m?.who === 'user' ? 'user' : 'assistant';
+      const content = clean(m?.html || m?.text);
+      if (content) messages.push({ role, content });
     }
-  };
 
-  return (
-    <main style={{ maxWidth: 680, margin: "40px auto", fontFamily: "sans-serif" }}>
-      <h2>Оюунсанаа — Чат (Single-submit)</h2>
+    messages.push({ role: 'user', content: clean(msg) });
 
-      <form onSubmit={send} style={{ display: "flex", gap: 8 }}>
-        <input
-          value={msg}
-          onChange={(e) => setMsg(e.target.value)}
-          placeholder="Асуултаа бич…"
-          style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #ccc" }}
-        />
-        <button
-          type="submit"
-          disabled={pending || !msg.trim()}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "none",
-            background: pending ? "#aaa" : "#052F5D",
-            color: "#fff",
-            cursor: pending ? "not-allowed" : "pointer",
-          }}
-        >
-          {pending ? "Илгээж байна…" : "Илгээх"}
-        </button>
-      </form>
+    // аль загвар ажиллуулах вэ (анхдагч нь gpt-4o-mini)
+    const chosen = model || (deep ? 'gpt-4o' : 'gpt-4o-mini');
 
-      {reply && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            background: "#f5f5f5",
-            borderRadius: 8,
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {reply}
-        </div>
-      )}
-    </main>
-  );
+    const r = await fetch(OPENAI_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: chosen,
+        messages,
+        temperature: 0.4,
+      }),
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      console.error('[oyunsanaa] OpenAI error', r.status, data);
+      return res.status(r.status).json({ ok: false, error: data?.error?.message || 'OpenAI API error' });
+    }
+
+    const reply = data?.choices?.[0]?.message?.content?.trim() || '';
+    return res.status(200).json({ ok: true, reply });
+  } catch (e: any) {
+    console.error('[oyunsanaa] server error:', e);
+    return res.status(500).json({ ok: false, error: e?.message || 'Server error' });
+  }
 }
