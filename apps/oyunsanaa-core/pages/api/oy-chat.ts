@@ -21,11 +21,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) { res.status(500).json({ error: "OPENAI_API_KEY not set" }); return; }
 
-    // Уртын контент → system context
-    const context = OYUNSANAA_PROMPT;
+    // Уртын контент → system context (12000 тэмдэгтээр танав)
+    const context = OYUNSANAA_PROMPT.slice(0, 12000);
 
     const messages = [
-      { role: "system", content: `Доорх баримтыг ЯГ ДАГА (монголоор хариул): """${context}"""` },
+      {
+        role: "system",
+        content: `Доорх баримтыг ЯГ ДАГА (монголоор хариул). 
+        Хариулт зөвхөн баримтаас үндэслэсэн байх.
+        Баримт: """${context}"""`
+      },
       ...history.map((h: any) => ({
         role: h.who === "bot" ? "assistant" : "user",
         content: String(h.txt || "")
@@ -40,10 +45,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     const data = await r.json();
 
-    if (!r.ok) { res.status(500).json({ error: `OpenAI ${r.status}: ${data?.error?.message || "unknown"}` }); return; }
+    if (!r.ok) {
+      return res.status(500).json({ error: `OpenAI ${r.status}: ${data?.error?.message || "unknown"}` });
+    }
 
     const reply: string | undefined = data?.choices?.[0]?.message?.content;
-    if (!reply) { res.status(500).json({ error: "OpenAI: empty choices" }); return; }
+    if (!reply) { return res.status(500).json({ error: "OpenAI: empty choices" }); }
 
     res.status(200).json({ tag: "OYU-OK", reply });
   } catch (e: any) {
