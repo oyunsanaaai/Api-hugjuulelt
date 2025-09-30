@@ -1,5 +1,6 @@
 // apps/oyunsanaa-core/pages/api/oy-chat.ts
-import fs from "fs";
+import { OYUNSANAA_PROMPT } from "../../prompts/oyunsanaa";
+ fs from "fs";
 import path from "path";
 const CORE_TXT = fs.readFileSync(path.join(process.cwd(),"knowledge/oy-core.mn.md"),"utf8");
  type { NextApiRequest, NextApiResponse } from "next";
@@ -27,11 +28,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 const context = CORE_TXT.slice(0, 12000);
 
-const messages = [
-  {
-    role: "system",
-    content: `Доорх баримтыг ЯГ ДАГА (монголоор хариул): """${context}"""`
-  },
+const context = OYUNSANAA_PROMPT; // урт файл (prompt) эндээс ирнэ
+ const messages = [
+  { role: "system", content: `Доорх баримтыг ЯГ ДАГА (монголоор хариул): """${context}"""` },
   ...history.map((h: any) => ({
     role: h.who === "bot" ? "assistant" : "user",
     content: String(h.txt || "")
