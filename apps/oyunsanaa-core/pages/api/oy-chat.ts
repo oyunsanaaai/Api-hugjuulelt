@@ -25,9 +25,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const context = CORE_TXT.slice(0, 12000); // эхлээд 8–12к тэмдэгт байхад хангалттай
 
+const context = CORE_TXT.slice(0, 12000);
+
 const messages = [
-  { role: "system", content: `Доорх баримтыг ЯГ ДАГА (монголоор хариул): """${context}"""` },
-  ...history.map((h: any) => ({ role: h.who === "bot" ? "assistant" : "user", content: String(h.txt || "") })),
+  {
+    role: "system",
+    content: `Доорх баримтыг ЯГ ДАГА (монголоор хариул): """${context}"""`
+  },
+  ...history.map((h: any) => ({
+    role: h.who === "bot" ? "assistant" : "user",
+    content: String(h.txt || "")
+  })),
   { role: "user", content: String(msg) }
 ];
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
