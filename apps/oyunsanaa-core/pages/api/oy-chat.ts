@@ -1,5 +1,8 @@
 // apps/oyunsanaa-core/pages/api/oy-chat.ts
-import type { NextApiRequest, NextApiResponse } from "next";
+import fs from "fs";
+import path from "path";
+const CORE_TXT = fs.readFileSync(path.join(process.cwd(),"knowledge/oy-core.mn.md"),"utf8");
+ type { NextApiRequest, NextApiResponse } from "next";
 
 const ORIGIN = "https://chat.oyunsanaa.com";
 
@@ -20,12 +23,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) { res.status(500).json({ error: "OPENAI_API_KEY not set" }); return; }
 
-    const messages = [
-      { role: "system", content: `Чи Оюунсанаа нэртэй чат, persona: ${persona}` },
-      ...history.map((h: any) => ({ role: h.who === "bot" ? "assistant" : "user", content: String(h.txt || "") })),
-      { role: "user", content: String(msg) }
-    ];
+    const context = CORE_TXT.slice(0, 12000); // эхлээд 8–12к тэмдэгт байхад хангалттай
 
+const messages = [
+  { role: "system", content: `Доорх баримтыг ЯГ ДАГА (монголоор хариул): """${context}"""` },
+  ...history.map((h: any) => ({ role: h.who === "bot" ? "assistant" : "user", content: String(h.txt || "") })),
+  { role: "user", content: String(msg) }
+];
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
